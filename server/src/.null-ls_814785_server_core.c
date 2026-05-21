@@ -2,10 +2,9 @@
 #include <netdb.h>
 
 #include <fcntl.h>
-#include <openssl/err.h>
 
 // To enable DEBUG() logs, define DEBUG_IMPL
-//#define DEBUG_IMPL
+#define DEBUG_IMPL
 #include "event_loop.h"
 #include "server.h"
 #include "workers.h"
@@ -182,7 +181,7 @@ SERVER_STATUS add_client(Worker *w, int sock)
         goto cleanup;
     }
 
-    INFO("Added client\n");
+    printf("Added client\n");
     return OK;
 
 cleanup:
@@ -253,11 +252,12 @@ SERVER_STATUS handle_handshake(EventLoop *loop, ClientTLS *c)
     }
 
     int err = SSL_get_error(c->ssl, r);
+    printf("SSL_accept ret=%d err=%d\n", r, err);
 
     if (err == SSL_ERROR_WANT_READ)
     {
         if (el_mod(loop, c->socket,
-                    EL_READ | EL_ET, c) < 0)
+                    EL_READ | EL_WRITE | EL_ET, c) < 0)
         {
             ERROR("epoll_ctl MOD failed after WANT_READ");
             return EPOLL_CTL_FAIL;
@@ -271,7 +271,7 @@ SERVER_STATUS handle_handshake(EventLoop *loop, ClientTLS *c)
     {
 
         if (el_mod(loop, c->socket,
-                    EL_WRITE | EL_ET, c) < 0)
+                    EL_READ | EL_WRITE | EL_ET, c) < 0)
         {
             ERROR("epoll_ctl MOD failed after WANT_WRITE");
             return EPOLL_CTL_FAIL;
@@ -307,7 +307,7 @@ SERVER_STATUS flush_send(ClientTLS *c, Worker *w)
                 err == SSL_ERROR_WANT_READ)
                 return OK;
 
-            ERR_print_errors_fp(stderr);
+            ERROR("SSL send failed");
             return SEND_FAIL;
         }
 
@@ -430,8 +430,8 @@ static inline PARSE_STATUS extract_message(
         return MSG_BUFFER_ALLOC_FAILED;
     }
 
-    // Data is stored right after the Message struct
-    // for cache efficiency and less malloc()
+    // Data is stored right after the
+    // Message struct for cache efficiency and less malloc()
     (*msg)->data = (uint8_t *)(*msg + 1);
 
     // Copy data from buffer
@@ -462,7 +462,7 @@ SERVER_STATUS handle_recv(
     EventLoop   *loop,
     int         current_worker_id)
 {
-    _Bool need_write = FALSE;
+    _Bool need_epoll_out = FALSE;
 
     while (1)
     {
@@ -503,7 +503,7 @@ SERVER_STATUS handle_recv(
 
         if (err == SSL_ERROR_WANT_WRITE)
         {
-            need_write = TRUE;
+            need_epoll_out = TRUE;
             break;
         }
 
@@ -511,7 +511,7 @@ SERVER_STATUS handle_recv(
         return RECV_FAIL;
     }
 
-    if (need_write)
+    if (need_epoll_out)
     {
         if (el_mod(loop, c->socket,
                     EL_READ | EL_WRITE | EL_ET, c) < 0)
@@ -614,7 +614,7 @@ SERVER_MAIN_STATUS server_run()
 
     for (int i = 0; i < workers_count; i++)
     {
-        msg_queues[i] = malloc(sizeof(Message **) * workers_count);
+        msg_queues[i] = malloc(sizeof(Message *) * workers_count);
 
         for (int j = 0; j < workers_count; j++)
         {
@@ -640,7 +640,7 @@ SERVER_MAIN_STATUS server_run()
         exit(EXIT_FAILURE);
     }
 
-    INFO("Server is listening on port %s...\n", DEFAULT_PORT);
+    printf("Server is listening on port %s...\n", DEFAULT_PORT);
 
     // Accept loop
     while (1)
@@ -670,7 +670,7 @@ SERVER_MAIN_STATUS server_run()
                         }
                     }
 
-                    INFO("New client connected!\n");
+                    printf("New client connected!\n");
 
                     // Sending client to the worker
                     Worker *w = &workers[next_worker];

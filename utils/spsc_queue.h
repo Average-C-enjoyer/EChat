@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "utils.h"
+
 #ifndef SPSC_Q_NO_SHORT_NAMES
 #define q_init     spsc_q_init
 #define q_push     spsc_q_push
@@ -17,7 +19,7 @@
 
 #define CACHELINE 64
 
-typedef struct SPSC_QueueHeader_s {
+typedef struct SPSC_QueueHeader {
     size_t capacity;
     size_t mask;
 
@@ -28,34 +30,20 @@ typedef struct SPSC_QueueHeader_s {
 #define q_header(q) ((SPSC_QueueHeader *)(q) - 1)
 
 
-// --- utils ---
-
-static inline size_t q_next_pow2(size_t x) {
-    x--;
-    x |= x >> 1;
-    x |= x >> 2;
-    x |= x >> 4;
-    x |= x >> 8;
-    x |= x >> 16;
-#if __SIZEOF_SIZE_T__ == 8
-    x |= x >> 32;
-#endif
-    return x + 1;
-}
-
-
-#define spsc_q_init(q, cap) do {                                                  \
-    size_t _cap = q_next_pow2(cap);                                               \
-    SPSC_QueueHeader *h = malloc(sizeof(SPSC_QueueHeader) + sizeof(*(q)) * _cap); \
-    if (!h) { perror("malloc"); exit(1); }                                        \
-                                                                                  \
-    h->capacity = _cap;                                                           \
-    h->mask = _cap - 1;                                                           \
-                                                                                  \
-    atomic_store(&h->head, 0);                                                    \
-    atomic_store(&h->tail, 0);                                                    \
-                                                                                  \
-    (q) = (void*)(h + 1);                                                         \
+#define spsc_q_init(q, cap) do {                             \
+    size_t _cap = next_pow2(cap);                            \
+    SPSC_QueueHeader *h = malloc(                            \
+            sizeof(SPSC_QueueHeader) + sizeof(*(q)) * _cap   \
+            );                                               \
+    if (!h) { perror("malloc"); exit(1); }                   \
+                                                             \
+    h->capacity = _cap;                                      \
+    h->mask = _cap - 1;                                      \
+                                                             \
+    atomic_store(&h->head, 0);                               \
+    atomic_store(&h->tail, 0);                               \
+                                                             \
+    (q) = (void*)(h + 1);                                    \
 } while (0)
 
 
@@ -112,9 +100,9 @@ static inline size_t q_next_pow2(size_t x) {
 } while (0)
 
 
-// (Consumer only) Pops an element and returns it, or 0 if the queue is empty. 
-// Note that 0 is a valid value, so the caller should check 
-// if the queue is empty before calling this macro to distinguish 
+// (Consumer only) Pops an element and returns it, or 0 if the queue is empty.
+// Note that 0 is a valid value, so the caller should check
+// if the queue is empty before calling this macro to distinguish
 // between an empty queue and a queue with 0 as the front element.
 #define spsc_q_pop_val(q) ({                                                 \
     __auto_type _q = (q);                                                    \

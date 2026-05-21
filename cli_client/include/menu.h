@@ -41,25 +41,32 @@ typedef enum {
     ENTER_CHAT
 } ActiveMenuType;
 
-typedef void *menu_handle_t;
+typedef struct MenuButtons MenuButtons;
 
-// Just basic signature for handling multiple menu types 
-// without creating 100500 funcs for each one or 
+typedef MenuButtons *menu_handle_t;
+
+// Just basic signature for handling multiple menu types
+// without creating 100500 funcs for each one or
 // implementing polymorphism in c.
 // had to remove readable button names, sorry :(
-typedef struct MenuButtons_s {
-    const char       **button1;
-    const char       **button2;
+struct MenuButtons {
+    const char        **button1;
+    const char        **button2;
 
-    void               (*btn1_pressed)(menu_handle_t self);
-    void               (*btn2_pressed)(menu_handle_t self);
+    void              (*btn1_pressed)(menu_handle_t self);
+    void              (*btn2_pressed)(menu_handle_t self);
 
-    ActiveMainMenuBtn  active_button;
-    ActiveMenuType     type;
-} MenuButtons;
+    ActiveMainMenuBtn active_button;
+    ActiveMenuType    type;
+};
 
 // API
 void init_menu(MenuButtons *menu);
 void display_menu(MenuButtons *menu, _Bool display_logo, _Bool display_hint);
+void handle_menu_selection(
+    MenuButtons *menu,
+    _Bool display_logo,
+    _Bool display_hint
+);
 
 #endif // MENU_H

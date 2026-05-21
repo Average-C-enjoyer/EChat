@@ -1,19 +1,18 @@
-  #include "client_core.h"
-
+#include "client_core.h"
 #include "cross_platform_api.h"
 #include "TLS.h"
+#include <stdio.h>
 #include <string.h>
 
 #define DEFAULT_PORT "4433"
 #define MAX_MESSAGE_SIZE 4096
 
-// ======================================================================
+// ================================================================
 // Enums and structs
-// ======================================================================
+// ================================================================
 
 // Enum for client error codes
-typedef enum CLIENT_STATE_E {
-    OK                  =  0,
+typedef enum CLIENT_STATE {
     ERR_INIT_CREATE_CTX = -1,
     ERR_INIT_GAI        = -2,
     ERR_CONNECT         = -3,
@@ -22,14 +21,15 @@ typedef enum CLIENT_STATE_E {
 } CLIENT_STATE;
 
 // Error codes for TLS operations
-typedef enum {
-    TLS_BAD_CONTEXT = -6,
-    TLS_BAD_CERT    = -7,
-    TLS_BAD_KEY     = -8,
-    SSL_ACCEPT_FAIL = -9,
-    SEND_FAIL       = -10,
-    RECV_FAIL       = -11,
-    BUFFER_OVERFLOW = -12
+typedef enum TLS_STATE {
+    OK                  =  0,
+    TLS_BAD_CONTEXT     = -6,
+    TLS_BAD_CERT        = -7,
+    TLS_BAD_KEY         = -8,
+    SSL_ACCEPT_FAIL     = -9,
+    SEND_FAIL           = -10,
+    RECV_FAIL           = -11,
+    BUFFER_OVERFLOW     = -12
 } TLS_STATE;
 
 // Client structure for TCP connections, TLS and callbacks
@@ -44,15 +44,15 @@ typedef struct ClientTLS_s {
     SSL_CTX *ctx;
 
     // recieve thread, starts automaticly.
-    // I'm too lazy to implement a complite cross-platform 
+    // I'm too lazy to implement a complite cross-platform
     // event loop only to read data, so i use multithreading
     // (better than basic select in my opinion)
     thread_t recv_thread;
 
     // Client callbacks
     void     (*on_connect) (_Bool connected);
-    void     (*on_message) (const uint8_t *message, uint32_t len);
-    void     (*on_error)   (uint32_t error_code, const uint8_t *error_message);
+    void     (*on_message) (const char *message, uint32_t len);
+    void     (*on_error)   (uint32_t error_code, const char *error_message);
 
     socket_t socket;
     uint32_t in_len;
@@ -61,17 +61,17 @@ typedef struct ClientTLS_s {
 } ClientTLS;
 
 
-// ======================================================================
+// ================================================================
 // Global variables
-// ======================================================================
+// ================================================================
 
 // addrinfo for tcp connection
 struct addrinfo  hints;
 
 
-// ======================================================================
+// ================================================================
 // Private api
-// ======================================================================
+// ================================================================
 
 static struct addrinfo *init_tcp(ClientTLS *client, uint8_t *ip)
 {
@@ -79,7 +79,12 @@ static struct addrinfo *init_tcp(ClientTLS *client, uint8_t *ip)
 
     if (INIT_WINSOCK() != 0)
     {
-        if (client->on_error) client->on_error(ERR_WINSOCK_INIT, "Failed to initialize WinSock2");
+        if (client->on_error)
+        {
+            client->on_error(
+                ERR_WINSOCK_INIT, "Failed to initialize WinSock2"
+            );
+        }
         return NULL;
     }
 
@@ -89,33 +94,46 @@ static struct addrinfo *init_tcp(ClientTLS *client, uint8_t *ip)
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
 
-    int gai = getaddrinfo((const char *)ip, DEFAULT_PORT, &hints, &result);
+    int gai = getaddrinfo(
+        (const char *)ip,
+        DEFAULT_PORT,
+        &hints,
+        &result
+    );
     if (gai != 0)
     {
-        if (client->on_error) client->on_error(ERR_INIT_GAI, gai_strerror(gai));
+        if (client->on_error)
+        {
+            client->on_error(ERR_INIT_GAI, gai_strerror(gai));
+        }
 		return NULL;
     }
 
     return result;
 }
 
-static CLIENT_STATE init_tls(ClientTLS *client) 
+static CLIENT_STATE init_tls(ClientTLS *client)
 {
 	init_openssl();
 
     client->ctx = create_ctx();
     if (!client->ctx) {
-        if (client->on_error) 
+        if (client->on_error)
         {
-            client->on_error(ERR_INIT_CREATE_CTX, "Failed to create SSL context");
+            client->on_error(
+                ERR_INIT_CREATE_CTX, "Failed to create SSL context"
+            );
         }
         return ERR_INIT_CREATE_CTX;
     }
-    return OK;
+    return (CLIENT_STATE)OK;
 }
 
 
-static CLIENT_STATE connect_to_server(ClientTLS *client, struct addrinfo *result)
+static CLIENT_STATE connect_to_server(
+    ClientTLS *client,
+    struct addrinfo *result
+)
 {
     struct addrinfo *ptr = NULL;
     for (ptr = result; ptr != NULL; ptr = ptr->ai_next)
@@ -134,7 +152,7 @@ static CLIENT_STATE connect_to_server(ClientTLS *client, struct addrinfo *result
         if (connect(
             client->socket,
             ptr->ai_addr,
-            (int)ptr->ai_addrlen) == 0) 
+            (int)ptr->ai_addrlen) == 0)
         {
             break;
         }
@@ -143,18 +161,23 @@ static CLIENT_STATE connect_to_server(ClientTLS *client, struct addrinfo *result
         client->socket = -1;
     }
 
-    if (client->socket < 0) 
+    if (client->socket < 0)
     {
-        if (client->on_error) client->on_error(ERR_CONNECT, "Unable to connect to server");
+        if (client->on_error)
+        {
+            client->on_error(
+                ERR_CONNECT, "Unable to connect to server"
+            );
+        }
         return ERR_CONNECT;
     }
 
     freeaddrinfo(result);
-    return OK;
+    return (CLIENT_STATE)OK;
 }
 
 
-static TLS_STATE tls_handshake(ClientTLS *client) 
+static TLS_STATE tls_handshake(ClientTLS *client)
 {
     client->ssl = SSL_new(client->ctx);
     SSL_set_fd(client->ssl, (int)client->socket);
@@ -162,13 +185,23 @@ static TLS_STATE tls_handshake(ClientTLS *client)
 
     if (SSL_connect(client->ssl) <= 0)
     {
-        if (client->on_error) client->on_error(SSL_ACCEPT_FAIL, "TLS handshake failed");
+        if (client->on_error)
+        {
+            client->on_error(
+                SSL_ACCEPT_FAIL, "TLS handshake failed"
+            );
+        }
         return SSL_ACCEPT_FAIL;
     }
 
     if (!verify_certificate(client->ssl))
     {
-        if (client->on_error) client->on_error(TLS_BAD_CERT, "Certificate verification failed");
+        if (client->on_error)
+        {
+            client->on_error(
+                TLS_BAD_CERT, "Certificate verification failed"
+            );
+        }
         return TLS_BAD_CERT;
     }
 
@@ -179,13 +212,19 @@ static TLS_STATE tls_handshake(ClientTLS *client)
 
 // Length-prefixed protocol I/O
 
-static TLS_STATE send_packet(ClientTLS *client, const uint8_t *data, uint32_t len)
+static TLS_STATE send_packet(
+    ClientTLS *client,
+    const uint8_t *data,
+    uint32_t len
+)
 {
     if (len > MAX_MESSAGE_SIZE)
     {
-        if (client->on_error) 
+        if (client->on_error)
         {
-            client->on_error(BUFFER_OVERFLOW, "Message size exceeds maximum allowed");
+            client->on_error(
+                BUFFER_OVERFLOW, "Message size exceeds maximum allowed"
+            );
         }
         return BUFFER_OVERFLOW;
     }
@@ -194,13 +233,21 @@ static TLS_STATE send_packet(ClientTLS *client, const uint8_t *data, uint32_t le
 
     if (SSL_write(client->ssl, &net_len, sizeof(net_len)) <= 0)
     {
-        if (client->on_error) client->on_error(SEND_FAIL, "Failed to send packet length");
+        if (client->on_error)
+        {
+            client->on_error(SEND_FAIL, "Failed to send packet length");
+        }
         return SEND_FAIL;
     }
 
     if (SSL_write(client->ssl, data, len) <= 0)
     {
-        if (client->on_error) client->on_error(SEND_FAIL, "Failed to send packet data");
+        if (client->on_error)
+        {
+            client->on_error(
+                SEND_FAIL, "Failed to send packet data"
+            );
+        }
         return SEND_FAIL;
     }
 
@@ -209,7 +256,7 @@ static TLS_STATE send_packet(ClientTLS *client, const uint8_t *data, uint32_t le
 
 static TLS_STATE handle_recv(ClientTLS *client)
 {
-    if (client->running == FALSE) 
+    if (client->running == FALSE)
     {
         pthread_exit(NULL);
         return OK;
@@ -223,7 +270,10 @@ static TLS_STATE handle_recv(ClientTLS *client)
 
     if (r <= 0)
     {
-        if (client->on_error) client->on_error(RECV_FAIL, "Failed to receive data");
+        if (client->on_error)
+        {
+            client->on_error(RECV_FAIL, "Failed to receive data");
+        }
         return RECV_FAIL;
     }
 
@@ -241,9 +291,12 @@ static TLS_STATE handle_recv(ClientTLS *client)
 
         if (msg_len > MAX_MESSAGE_SIZE)
         {
-            if (client->on_error) 
+            if (client->on_error)
             {
-                client->on_error(BUFFER_OVERFLOW, "Received message size exceeds maximum allowed");
+                client->on_error(
+                    BUFFER_OVERFLOW,
+                    "Received message size exceeds maximum allowed"
+                );
             }
             return BUFFER_OVERFLOW;
         }
@@ -255,7 +308,10 @@ static TLS_STATE handle_recv(ClientTLS *client)
 
         uint8_t *payload = client->in_buffer + 4;
 
-        if (client->on_message) client->on_message(payload, msg_len);
+        if (client->on_message)
+        {
+            client->on_message((char*)payload, msg_len);
+        }
 
         memmove(
             client->in_buffer,
@@ -272,13 +328,15 @@ static TLS_STATE handle_recv(ClientTLS *client)
 // Send thread (main)
 static void client_do_send(ClientTLS *client, uint8_t *buffer)
 {
-    size_t len = strlen(buffer);
+    size_t len = strlen((char*)buffer);
 
     if (len == 0)
     {
-        if (client->on_error) 
+        if (client->on_error)
         {
-            client->on_error(ERR_BAD_LEN, "Invalid buffer: length is equal to zero");
+            client->on_error(
+                ERR_BAD_LEN, "Invalid buffer: length is equal to zero"
+            );
             return;
         }
     }
@@ -288,10 +346,13 @@ static void client_do_send(ClientTLS *client, uint8_t *buffer)
         buffer[--len] = '\0';
     }
 
-    int8_t err = send_packet(client, (unsigned char *)buffer, (uint32_t)len);
+    int8_t err = send_packet(client, (uint8_t *)buffer, (uint32_t)len);
     if (err < 0)
     {
-        if (client->on_error) client->on_error(err, "Failed to send packet");
+        if (client->on_error)
+        {
+            client->on_error(err, "Failed to send packet");
+        }
     }
 }
 
@@ -348,31 +409,34 @@ ECHAT_API void client_connect(client_handle_t handle, uint8_t *ip)
 {
     ClientTLS *client = (ClientTLS *)handle;
 
+    client->on_message("Initialize TCP...", 18);
     struct addrinfo *result = init_tcp(client, ip);
     if (result == NULL)
     {
-		if (client->on_connect) client->on_connect(FALSE);
+        if (client->on_connect) client->on_connect(FALSE);
         return;
     }
 
+    client->on_message("Initialize TLS...", 18);
     if (init_tls(client) < 0)
     {
         if (client->on_connect) client->on_connect(FALSE);
         return;
     }
-
+    client->on_message("Connecting to server...", 24);
     if (connect_to_server(client, result) < 0)
-    {
-        if (client->on_connect) client->on_connect(FALSE);
-        return;
-	}
-
-	if (tls_handshake(client) < 0)
     {
         if (client->on_connect) client->on_connect(FALSE);
         return;
     }
 
+    client->on_message("Handshaking...", 15);
+    if (tls_handshake(client) < 0)
+    {
+        if (client->on_connect) client->on_connect(FALSE);
+        return;
+    }
+    client->on_message("Handshake done, starting read", 30);
     client->running = 1;
 
     THREAD_CREATE(client->recv_thread, client_do_read, client);
@@ -418,28 +482,38 @@ ECHAT_API void client_send(client_handle_t handle, uint8_t *payload)
 }
 
 /* ------------------------Callback setters----------------------------*/
-ECHAT_API void client_set_on_connect_callback(client_handle_t handle, on_connect_callback cb)
+ECHAT_API void client_set_on_connect_callback(
+    client_handle_t handle,
+    on_connect_callback cb
+)
 {
     ClientTLS *client = (ClientTLS *)handle;
 
     if (cb) client->on_connect = cb;
 }
 
-ECHAT_API void client_set_on_message_callback(client_handle_t handle, on_message_callback cb)
+ECHAT_API void client_set_on_message_callback(
+    client_handle_t handle,
+    on_message_callback cb
+)
 {
     ClientTLS *client = (ClientTLS *)handle;
 
     if (cb) client->on_message = cb;
 }
 
-ECHAT_API void client_set_on_error_callback(client_handle_t handle, on_error_callback cb)
+ECHAT_API void client_set_on_error_callback(
+    client_handle_t handle,
+    on_error_callback cb
+)
 {
     ClientTLS *client = (ClientTLS *)handle;
 
     if (cb) client->on_error = cb;
 }
 
-ECHAT_API void client_set_name(client_handle_t handle, uint8_t *name)
+/* ----------------------Client struct field setters ------------------*/
+ECHAT_API void client_set_name(client_handle_t handle, char *name)
 {
     ClientTLS *client = (ClientTLS *)handle;
 

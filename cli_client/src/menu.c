@@ -6,32 +6,33 @@
 #define BIG_LOGO_WIDTH 40
 #define SMALL_LOGO_WIDTH 19
 
-// =========================================================================
+// ================================================================
 // Chat logo assets
-// =========================================================================
+// ================================================================
 
 /* Array of lines so i can print and center it */
 
 const char *big_logo[] = {
 GREEN
-"████████  ███████ ██                ██",
+    "████████  ███████ ██                ██",
 "██▓      ▓██      ██        ████    ██",
 "█▓▓▓░▓   ▓█▓      █▓▓▓██   █▓  ██ ███▓▓█▓",
 "▓▓░      ░▓▓      █▓   ▓▓  █▓▓█▓▓   ▓▓░",
 "░░▓░░▓░░  ░▓░░▓░░ ▓░   ░░  ▓░  ░░    ▓░░"
+    RESET_COLOR
 };
 
 
 const char *small_logo[] = {
 GREEN
-"██▀ ▄▀▀ █▄█ ▄▀▄ ▀█▀",
+    "██▀ ▄▀▀ █▄█ ▄▀▄ ▀█▀",
 "█▄▄ ▀▄▄ █ █ █▀█  █ "
 RESET_COLOR
 };
 
-// =========================================================================
+// ================================================================
 // Main menu buttons assets
-// =========================================================================
+// ================================================================
 const char *btn_reg[] = {
 "╔────────────────────╗",
 "│ SIGN IN OR SIGN UP │",
@@ -40,7 +41,7 @@ const char *btn_reg[] = {
 
 const char *btn_reg_choosed[] = {
 GREEN
-"╔────────────────────╗",
+    "╔────────────────────╗",
 "│ SIGN IN OR SIGN UP │",
 "╚────────────────────╝"
 RESET_COLOR
@@ -54,16 +55,16 @@ const char *btn_guest[] = {
 
 const char *btn_guest_choosed[] = {
 GREEN
-"╔────────────────────╗",
+    "╔────────────────────╗",
 "│ CONTINUE AS GUEST  │",
 "╚────────────────────╝"
 RESET_COLOR
 };
 
 
-// =========================================================================
+// ================================================================
 // Chat selection menu buttons assets
-// =========================================================================
+// ================================================================
 
 const char *btn_enter_group_chat[] = {
 "╔────────────────────╗",
@@ -73,7 +74,7 @@ const char *btn_enter_group_chat[] = {
 
 const char *btn_enter_group_chat_choosed[] = {
 GREEN
-"╔────────────────────╗",
+    "╔────────────────────╗",
 "│  ENTER GROUP CHAT  │",
 "╚────────────────────╝"
 RESET_COLOR
@@ -87,16 +88,16 @@ const char *btn_enter_p2p_chat[] = {
 
 const char *btn_enter_p2p_chat_choosed[] = {
 GREEN
-"╔────────────────────╗",
+    "╔────────────────────╗",
 "│   ENTER P2P CHAT   │",
 "╚────────────────────╝"
 RESET_COLOR
 };
 
 
-// =========================================================================
+// ================================================================
 // Chat window assets
-// =========================================================================
+// ================================================================
 
 const char *group_chat_header =
 GREEN
@@ -113,9 +114,9 @@ GREEN
 RESET_COLOR;
 
 
-// =========================================================================
+// ================================================================
 // Utility funcs
-// =========================================================================
+// ================================================================
 
 void draw_frame(int w, int h) {
     // Top border
@@ -166,6 +167,8 @@ static inline void switch_active_button(MenuButtons *menu)
             menu->active_button = BUTTON_1;
             break;
         }
+        break;
+    case ENTER_CHAT:
         break;
     }
 }
@@ -240,7 +243,7 @@ void handle_menu_selection(StartMenu *menu)
 
 static struct termios global_orig;
 
-static inline void enable_raw_mode(void) 
+static inline void enable_raw_mode(void)
 {
     struct termios raw;
 
@@ -267,7 +270,10 @@ static inline void restore_stdin_mode(void)
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &t);
 }
 
-void handle_menu_selection(MenuButtons *menu, _Bool display_logo, _Bool display_hint) 
+void handle_menu_selection(
+        MenuButtons *menu,
+        _Bool display_logo,
+        _Bool display_hint)
 {
     char c;
 
@@ -296,7 +302,7 @@ void handle_menu_selection(MenuButtons *menu, _Bool display_logo, _Bool display_
             } else {
                 menu->btn2_pressed(menu);
             }
-            break;
+           break;
         }
     }
 
@@ -383,5 +389,4 @@ void display_menu(MenuButtons *menu, _Bool display_logo, _Bool display_hint)
         print_at(btn_x, y + i, menu->button2[i]);
     }
 
-    handle_menu_selection(menu, display_logo, display_hint);
 }

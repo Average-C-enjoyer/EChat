@@ -76,6 +76,7 @@ if(UNIX AND NOT WIN32)
     add_executable(server
         "server/server.c"
         "server/src/server_core.c"
+        "server/src/event_loop.c"
     )
 
     target_include_directories(server
@@ -84,14 +85,13 @@ if(UNIX AND NOT WIN32)
             ${CMAKE_CURRENT_SOURCE_DIR}/utils
             ${JEMALLOC_INCLUDE_DIRS}
     )
+    target_link_directories(server PRIVATE ${JEMALLOC_LIBRARY_DIRS})
 
     target_link_libraries(server
         PRIVATE
             OpenSSL::SSL
             OpenSSL::Crypto
             ${JEMALLOC_LIBRARIES}
-            atomic
-            
     )
 
 endif()
@@ -132,7 +132,7 @@ function(add_echat_test name)
     target_include_directories(${name}
         PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/include
-            ${CMAKE_CURRENT_SOURCE_DIR}/utils   
+            ${CMAKE_CURRENT_SOURCE_DIR}/utils
     )
 
     target_link_libraries(${name}

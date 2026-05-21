@@ -2,19 +2,22 @@
 #include "menu.h"
 #include "terminal.h"
 
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
-// Debug mode in Visual Studio don't support argv 
+#define IP_LENGTH 15
+
+// Debug mode in Visual Studio don't support argv
 // so I need this macro to run correctly
-#define RUN_FROM_VS_DEBUG
+//#define RUN_FROM_VS_DEBUG
 
 #ifdef RUN_FROM_VS_DEBUG
     #define MAIN_ARGS void
 
     #define handle_main_args() do { \
         strcpy(ip, "127.0.0.1");    \
-    } while (0) 
+    } while (0)
 #else
     #define MAIN_ARGS int argc, char *argv[]
 
@@ -33,28 +36,24 @@
         else {                                                       \
             strcpy(ip, "127.0.0.1");                                 \
         }                                                            \
-    } while (0) 
+    } while (0)
 #endif
 
 void on_connect(_Bool connected)
 {
-    switch (connected) {
-    case 1:
+    if (connected) {
         printf("Connected succesfully!\n");
-        break;
-    case 0:
-        printf("Unable to connect\n");
-        exit(0);
-        break;
+    } else {
+        printf("Unable to connect!\n");
     }
 }
 
-void on_message(const uint8_t *msg, uint32_t len)
+void on_message(const char *msg, uint32_t len)
 {
-    printf("%s\n", msg);
+    printf("%.*s\n", (int)len, msg);
 }
 
-void on_error(uint32_t error_code, const uint8_t *error_message)
+void on_error(uint32_t error_code, const char *error_message)
 {
     printf("[ERROR] %s: %d\n", error_message, error_code);
 }
@@ -63,7 +62,7 @@ void on_error(uint32_t error_code, const uint8_t *error_message)
 
 int main(MAIN_ARGS) {
     char ip[IP_LENGTH];
-    
+
     handle_main_args();
 
     // START MENU
@@ -72,34 +71,38 @@ int main(MAIN_ARGS) {
     MenuButtons menu;
 
     init_menu(&menu);
-    
-    while (1) {
-        if (menu.type == MAIN_MENU)
-            display_menu(&menu, 1, 1);
-        else if (menu.type == CHAT_SELECTION_MENU)
-            display_menu(&menu, 0, 0);
-        else
-            break;
-    }
 
+    while (1) {
+        if (menu.type == MAIN_MENU) {
+            display_menu(&menu, 1, 1);
+            handle_menu_selection(&menu,1, 1);
+        }
+        else if (menu.type == CHAT_SELECTION_MENU) {
+            display_menu(&menu, 0, 0);
+            handle_menu_selection(&menu,0, 0);
+        }
+        else {
+            break;
+        }
+    }
     terminal_restore();
 
 #ifndef _WIN32
     system("stty sane");
 #endif
-
-    // Creating handle 
+    // Creating handle
     client_handle_t handle = client_create();
 
     client_set_on_connect_callback(handle, on_connect);
     client_set_on_message_callback(handle, on_message);
     client_set_on_error_callback(handle, on_error);
 
-    client_connect(handle, ip);
-
+    printf("Connecting...\n");
+    client_connect(handle, (uint8_t*)ip);
+    printf("Connected\n");
     // Name input
     {
-        uint8_t name[MAX_NAME_LENGTH];
+        char name[MAX_NAME_LENGTH];
         while (1)
         {
             printf("Enter name (16 characters max): ");
@@ -144,5 +147,6 @@ int main(MAIN_ARGS) {
 
     client_disconnect(handle);
     client_destroy(handle);
+
     return 0;
 }

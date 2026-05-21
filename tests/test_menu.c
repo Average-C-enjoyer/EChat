@@ -1,7 +1,7 @@
 #include "menu.h"
 
 int main(void) {
-
+/*
 	StartMenu menu_button;
 
 	init_menu(&menu_button);
@@ -14,6 +14,6 @@ int main(void) {
 	system("clear");
 #endif
 	printf("You exited menu\n");
-
+*/
 	return 0;
 }

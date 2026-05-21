@@ -10,23 +10,23 @@
 
 // Dll stuff
 #if defined(_WIN32) || defined(__CYGWIN__)
-	#ifdef ECHAT_DLL_EXPORTS
-		#define ECHAT_API __declspec(dllexport)
-	#else
-		#define ECHAT_API __declspec(dllimport)
-	#endif
+    #ifdef ECHAT_DLL_EXPORTS
+        #define ECHAT_API __declspec(dllexport)
+    #else
+        #define ECHAT_API __declspec(dllimport)
+    #endif
 #else
-	#ifdef ECHAT_DLL_EXPORTS
-		#define ECHAT_API __attribute__((visibility("default")))
-	#else
-		#define ECHAT_API
-	#endif
+    #ifdef ECHAT_DLL_EXPORTS
+        #define ECHAT_API __attribute__((visibility("default")))
+    #else
+        #define ECHAT_API
+    #endif
 #endif
 
 /* -------Callback typedefs-------*/
 typedef void(*on_connect_callback)(_Bool connected);
-typedef void(*on_message_callback)(const uint8_t *msg, uint32_t len);
-typedef void(*on_error_callback)(uint32_t error_code, const uint8_t *error_message);
+typedef void(*on_message_callback)(const char *msg, uint32_t len);
+typedef void(*on_error_callback)(uint32_t error_code, const char *error_message);
 
 // Handle for client
 typedef void *client_handle_t;
@@ -55,4 +55,4 @@ ECHAT_API void client_set_on_error_callback(client_handle_t handle, on_error_cal
 /* ------- Client fields setters------- */
 
 // Sets name to client struct
-ECHAT_API void client_set_name(client_handle_t handle, uint8_t *name);
+ECHAT_API void client_set_name(client_handle_t handle, char *name);
